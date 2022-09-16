@@ -8,6 +8,8 @@
 #include <termios.h>
 #include <unistd.h>
 
+#include <sys/ioctl.h>
+
 #include "cbase/base.h"
 #include "cbase/base.c"
 
@@ -86,7 +88,7 @@ search(struct string searchterm, struct string paths[], S32 pathcnt, B32 activep
   {
     pathcurr = paths[i_path];
     i_last = 0, i_word = 0;
-    while (i_word < searchterm.l && i_last >= 0)
+    while (i_word < searchterm.l && i_last != -1)
     {
       lett = searchterm.str[i_word];
       i_last = findletter(lett, pathcurr, i_last);
@@ -128,6 +130,38 @@ keypress()
   return(c);
 }
 
+#define SCREENCLS  "\033[2J\n"
+#define CURSORCLS  "\033[0;0f\n"
+
+internal void
+display(char *word, struct string *paths, S32 pathcnt, B32 *activepaths, S32 i_selected)
+{
+  S32 i_active = 0, i_path = 0;
+  printf(SCREENCLS CURSORCLS);
+  printf("searchterm: %s\n", (word[0])? word : "(null)");
+  printf("possible directories:\n");
+  for (i_path = 0; i_path < pathcnt; ++i_path)
+  {
+    if (activepaths[i_path])
+    {
+      if (i_active == i_selected)
+        printf(" >>> ");
+      else
+        printf("     ");
+      printf("%s\n", paths[i_path].str);
+      ++i_active;
+    }
+  }
+}
+
+internal void 
+inject_shell(const char* cmd)
+{
+  S32 i = 0;
+  while (cmd[i] != 0)
+    ioctl(0, TIOCSTI, &cmd[i++]);
+}
+
 #define MAX_PATHS 512
 #define MAX_WORD_LEN 64
 
@@ -136,9 +170,6 @@ keypress()
 #define KEY_UP     65
 #define KEY_DOWN   66
 #define KEY_ESC    27
-
-#define SCREENCLS  "\033[2J\n"
-#define CURSORCLS  "\033[0;0f\n"
 
 S32
 main()
@@ -159,31 +190,12 @@ main()
     // TODO(Elias): possibly a better way instead of constanly mallocing and freeing
     searchterm = strinit(chararr, i_arr);
     memset(activepaths, 0, sizeof(activepaths));
+    
     activecnt = search(searchterm, paths, pathcnt, activepaths);
+    
     strdie(searchterm);
     
-    printf(SCREENCLS CURSORCLS);
-    printf("searchterm: %s\n", (chararr[0])? chararr : "(null)");
-    printf("possible directories:\n");
-    
-    i_active = 0;
-    for (i_path = 0; i_path < arraycount(paths); ++i_path)
-    {
-      if (activepaths[i_path])
-      {
-        if (i_active == i_selected)
-        {
-          pathselected = &paths[i_path];
-          printf(" >>> ");
-        }
-        else
-        {
-          printf("     ");
-        }
-        printf("%s\n", paths[i_path].str);
-        ++i_active;
-      }
-    }
+    display(chararr, paths, pathcnt, activepaths, i_selected);
     
     switch ((c = keypress()))
     {
@@ -234,14 +246,29 @@ main()
     
     // TODO(Elias): do we need to cap loops per second?
   } 
-
+  
   printf(SCREENCLS CURSORCLS);
-  printf("\ngoing to the following directory: %s\n\n", pathselected->str);
 
-  // NOTE(Elias): change direcorty not working, this only changes the directory of the current process
-  S32 err = chdir("..");
-  printf("%d\n", err);
+  i_active = 0;
+  for (i_path = 0; i_path < pathcnt; ++i_path)
+  {
+    if (i_active == i_selected)
+      pathselected = &paths[i_path];
+    if (activepaths[i_path])
+      ++i_active;
+  }
+
+  char command[4 + pathselected->l + 3 + 1];
+  strcpy(&command[0], "cd \"");
+  strcpy(&command[4], pathselected->str);
+  strcpy(&command[4 + pathselected->l], "\"\n");
+  
+  inject_shell(command);
+  
+  printf(SCREENCLS CURSORCLS);
 
   for (i_path = 0; i_path < pathcnt; ++i_path)
     strdie(paths[i_path]);
+
+  return(0);
 }

@@ -10,12 +10,12 @@ output="build/build"
 # 2.1 Debug Flags
 debug_dflags="-DENABLE_ASSERT=1 -DENABLE_DEBUG_MESSAGES=1"
 debug_wflags="-Wno-unused-variable -Wno-unused-function"
-debug_flags="-std=c99 -g -fsanitize=address -Wall ${debug_wflags} ${debug_dflags}"
+debug_flags="-g -fsanitize=address -Wall ${debug_wflags} ${debug_dflags}"
 
 # 2.2 Release Flags
 release_dflags=""
 release_wflags="-Wno-unused-variable -Wno-unused-function"
-release_flags="-std=c99 -O0 -Wall ${release_wflags} ${release_dflags}"
+release_flags="-O0 -Wall ${release_wflags} ${release_dflags}"
 
 # 3. Linker
 libs="-lm"

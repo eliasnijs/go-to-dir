@@ -8,6 +8,8 @@
 #include <termios.h>
 #include <unistd.h>
 
+#include <time.h>
+
 #include <sys/ioctl.h>
 
 #include "cbase/base.h"
@@ -162,6 +164,15 @@ inject_shell(const char* cmd)
     ioctl(0, TIOCSTI, &cmd[i++]);
 }
 
+
+internal S64
+nanos()
+{
+  struct timespec t;
+  clock_gettime(CLOCK_MONOTONIC_RAW, &t);
+  return((S64)t.tv_sec*10e9 + (S64)(t.tv_nsec));
+}
+
 #define MAX_PATHS 512
 #define MAX_WORD_LEN 64
 
@@ -171,13 +182,16 @@ inject_shell(const char* cmd)
 #define KEY_DOWN   66
 #define KEY_ESC    27
 
+#define NANOS_PER_LOOP 33333333
+
 S32
 main()
 {
   S32             pathcnt, activecnt, i_path, i_arr, i_selected, esclv, i_active;
-  struct string   pathcurr, *pathselected, searchterm, paths[MAX_PATHS];
+  S64             starttime;
   B32             enter, activepaths[MAX_PATHS];
   char            c, chararr[MAX_WORD_LEN];
+  struct string   pathcurr, *pathselected, searchterm, paths[MAX_PATHS];
 
   pathcnt = 0;
   memset(paths, 0, sizeof(paths));
@@ -187,6 +201,8 @@ main()
   enter = false, i_arr = 0, i_selected = 0, activecnt = 0, esclv = 0;
   while (!enter) 
   {
+    starttime = nanos();
+
     // TODO(Elias): possibly a better way instead of constanly mallocing and freeing
     searchterm = strinit(chararr, i_arr);
     memset(activepaths, 0, sizeof(activepaths));
@@ -244,7 +260,8 @@ main()
         break;
     }
     
-    // TODO(Elias): do we need to cap loops per second?
+    while(nanos() < starttime + NANOS_PER_LOOP)
+      ;
   } 
   
   printf(SCREENCLS CURSORCLS);
